@@ -1,0 +1,4 @@
+## Downloaded into managed_components on the first build
+dependencies:
+  idf: ">=5.3"
+  espressif/led_strip: "^3.0.0"     # WS281x / SK6812 timing on the RMT peripheral

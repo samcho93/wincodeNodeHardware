@@ -1,0 +1,2 @@
+# Pixel node (WN-PIX4)
+CONFIG_WN_DEVICE_PIXEL=y

@@ -1,0 +1,121 @@
+menu "Wincode node"
+
+    choice WN_DEVICE
+        prompt "Device type"
+        default WN_DEVICE_WINCH
+        config WN_DEVICE_WINCH
+            bool "Kinetic winch (WN-WINCH)"
+        config WN_DEVICE_PIXEL
+            bool "Pixel node, 4 outputs (WN-PIX4)"
+    endchoice
+
+    menu "Network"
+        config WN_ETH_ENABLE
+            bool "Ethernet (LAN8720 on RMII)"
+            default y
+        config WN_ETH_PHY_ADDR
+            int "PHY address"
+            default 1
+        config WN_ETH_MDC_GPIO
+            int "MDC GPIO"
+            default 23
+        config WN_ETH_MDIO_GPIO
+            int "MDIO GPIO"
+            default 18
+        config WN_ETH_POWER_GPIO
+            int "PHY power / oscillator enable GPIO (-1 = none)"
+            default 16
+        config WN_WIFI_SSID
+            string "Wi-Fi network (empty = no Wi-Fi)"
+            default ""
+            help
+                Used when no Ethernet link comes up within a few seconds. Wi-Fi is fine for configuration, but show
+                data at 40 frames a second wants a cable.
+        config WN_WIFI_PASSWORD
+            string "Wi-Fi password"
+            default ""
+    endmenu
+
+    menu "Board"
+        config WN_LED_GPIO
+            int "Status LED GPIO"
+            default 14 if WN_DEVICE_WINCH
+            default 2
+        config WN_BUTTON_GPIO
+            int "Button GPIO (hold 5 s at power-up = factory settings, -1 = none)"
+            default 15
+        config WN_VIN_ADC_CHANNEL
+            int "ADC1 channel of the supply divider (-1 = none)"
+            default 4
+            help
+                ADC1 channel 4 is GPIO32. The divider is 100 k over 10 k (ratio 11).
+        config WN_NTC_ADC_CHANNEL
+            int "ADC1 channel of the 10 k NTC (-1 = none)"
+            default 5
+            help
+                ADC1 channel 5 is GPIO33. NTC 10 k (B 3950) to ground, 10 k to 3.3 V.
+    endmenu
+
+    menu "Winch"
+        depends on WN_DEVICE_WINCH
+        config WN_STEP_GPIO
+            int "STEP GPIO"
+            default 4
+        config WN_DIR_GPIO
+            int "DIR GPIO"
+            default 5
+        config WN_ENABLE_GPIO
+            int "ENABLE GPIO (active low at the opto-coupler)"
+            default 17
+        config WN_BRAKE_GPIO
+            int "Brake release GPIO (high = released, -1 = no brake)"
+            default 2
+        config WN_LIMIT_TOP_GPIO
+            int "Top limit switch GPIO (low = pressed)"
+            default 34
+        config WN_LIMIT_BOTTOM_GPIO
+            int "Bottom limit switch GPIO (low = pressed, -1 = none)"
+            default 35
+        config WN_ALARM_GPIO
+            int "Driver alarm GPIO (low = fault, -1 = none)"
+            default 36
+        config WN_ESTOP_GPIO
+            int "Emergency-stop chain sense GPIO (low = chain open, -1 = none)"
+            default 39
+        config WN_STEPS_PER_MM_X100
+            int "Steps per millimetre of cable x 100"
+            default 1273
+            help
+                (driver steps per revolution) / (drum circumference in mm) x 100.
+                Default: 1600 steps per revolution on a 40 mm drum (125.66 mm) = 12.73 steps/mm.
+        config WN_DIR_DOWN_HIGH
+            bool "DIR high = cable out (down)"
+            default y
+        config WN_HOME_SPEED
+            int "Homing speed (mm/s)"
+            default 60
+        config WN_REQUIRE_HOME
+            bool "Do not follow DMX until the winch has been homed"
+            default y
+        config WN_LAMP_GPIO
+            int "Lamp pixel data GPIO"
+            default 13
+    endmenu
+
+    menu "Pixel node"
+        depends on WN_DEVICE_PIXEL
+        config WN_PIX1_GPIO
+            int "Output 1 data GPIO"
+            default 4
+        config WN_PIX2_GPIO
+            int "Output 2 data GPIO"
+            default 5
+        config WN_PIX3_GPIO
+            int "Output 3 data GPIO"
+            default 13
+        config WN_PIX4_GPIO
+            int "Output 4 data GPIO"
+            default 14
+    endmenu
+
+endmenu

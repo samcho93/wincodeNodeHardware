@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wincode Node Hardware</title>
+<style>
+:root { --bg: #0c0e11; --panel: #14181d; --line: #2a313b; --text: #dfe5ec; --dim: #8a94a2; --acc: #ff8a1f; --acc2: #2aa3ff; --red: #ff6b6b; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.6 "Segoe UI", "Malgun Gothic", system-ui, sans-serif; }
+.wrap { display: grid; grid-template-columns: 240px minmax(0, 1fr); min-height: 100vh; }
+nav { position: sticky; top: 0; height: 100vh; overflow: auto; padding: 22px 18px; background: var(--panel); border-right: 1px solid var(--line); }
+nav .brand { color: var(--acc); letter-spacing: 3px; font-weight: 700; } nav .sub { color: var(--dim); font-size: 13px; margin-bottom: 16px; }
+nav a { display: block; color: var(--text); text-decoration: none; padding: 4px 0; font-size: 14px; } nav a:hover { color: var(--acc); }
+main { padding: 28px 40px 80px; max-width: 1200px; }
+h1 { margin: 0 0 4px; font-size: 28px; } h1 small { display: block; color: var(--dim); font-size: 15px; font-weight: 400; }
+h2 { margin: 42px 0 10px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 22px; } h3 { margin: 24px 0 8px; font-size: 17px; color: var(--acc); }
+a { color: var(--acc2); } code { background: #1b2027; padding: 1px 5px; border-radius: 4px; font-size: 13px; }
+pre { background: #10141a; border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; overflow: auto; font-size: 13px; }
+table { border-collapse: collapse; width: 100%; margin: 8px 0 16px; font-size: 14px; } th, td { text-align: left; padding: 6px 9px; border-bottom: 1px solid var(--line); vertical-align: top; } th { color: var(--dim); font-weight: 500; }
+figure { margin: 14px 0 20px; } figure img { width: 100%; border-radius: 8px; border: 1px solid var(--line); background: #fbfbfc; } figcaption { color: var(--dim); font-size: 13px; margin-top: 6px; }
+.note { border-left: 3px solid var(--acc2); background: #111820; padding: 9px 14px; border-radius: 4px; margin: 12px 0; }
+.warn { border-left: 3px solid var(--red); background: #1e1214; padding: 9px 14px; border-radius: 4px; margin: 12px 0; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; } .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; } .card b { color: var(--acc); }
+@media (max-width: 860px) { .wrap { grid-template-columns: 1fr; } nav { position: static; height: auto; } main { padding: 20px 16px 60px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav>
+  <div class="brand">WINCODE</div><div class="sub">Node Hardware</div>
+  <a href="#overview">1. Overview</a>
+  <a href="#core">2. Core board</a>
+  <a href="#winch">3. WN-WINCH — kinetic winch</a>
+  <a href="#pixel">4. WN-PIX4 — pixel node</a>
+  <a href="#firmware">5. Firmware</a>
+  <a href="#build">6. Build and flash</a>
+  <a href="#test">7. Bring-up and test</a>
+  <a href="#status">8. Status and limits</a>
+  <a href="https://github.com/samcho93/wincodeNodeHardware">Repository</a>
+  <a href="https://samcho93.github.io/wincodeNodeManager/">Node Manager →</a>
+</nav>
+<main>
+<h1>Wincode Node Hardware <small>Circuit diagrams and ESP32 firmware for the nodes the Wincode Node Manager configures</small></h1>
+
+<h2 id="overview">1. Overview</h2>
+<p>Every node is the same <b>core board</b> — an ESP32 with Ethernet, power and the board sensing — plus the I/O of its type. One firmware source builds every type; the type is chosen when the firmware is built. The firmware speaks the device API of the Node Manager (<a href="https://github.com/samcho93/wincodeNodeManager/blob/main/docs/DEVICE-API.md">DEVICE-API.md</a>, version 1) and takes show data as Art-Net or sACN.</p>
+<div class="cards">
+  <div class="card"><b>WN-WINCH</b><br>Kinetic winch: a stepper motor with brake follows a 16-bit DMX position; a 60-pixel lamp hangs on the cable. Limit switches, a hardware E-stop chain, homing.</div>
+  <div class="card"><b>WN-PIX4</b><br>Pixel node: four WS2812B / WS2811 / SK6812 / SK6812-RGBW / UCS2903 outputs, up to 4096 pixels each, with per-output fuses.</div>
+  <div class="card"><b>Simulator first</b><br>The Node Manager's virtual devices run the same behaviour (<code>vdevice.js</code>). Its <i>Simulator</i> tab shows what this hardware will do with the same DMX.</div>
+</div>
+<table>
+  <tr><th>Path</th><th>What</th></tr>
+  <tr><td>Node Manager ↔ node</td><td>Discovery: UDP 7788 (JSON). Configuration, status, commands: HTTP + JSON on port 80.</td></tr>
+  <tr><td>Console → node</td><td>Art-Net (UDP 6454, ArtDmx; ArtPoll is answered) and sACN / E1.31 (UDP 5568, multicast). Both are accepted, whichever the configuration names.</td></tr>
+  <tr><td>Network</td><td>Ethernet (LAN8720, 100 Mbit/s) first; Wi-Fi station as a fallback when the firmware is built with a network name.</td></tr>
+</table>
+
+<h2 id="core">2. Core board</h2>
+<figure><img src="img/core.svg" alt="Core board block diagram"><figcaption>Core board: 24 V in, 5 V and 3.3 V, ESP32-WROOM-32E, LAN8720 + RJ45, USB-C programming, supply and temperature sensing.</figcaption></figure>
+<h3>ESP32 pins</h3>
+<table>
+  <tr><th>GPIO</th><th>Use</th><th>Note</th></tr>
+  <tr><td>0</td><td>RMII REF_CLK in (50 MHz)</td><td>Strapping pin: the oscillator is enabled by GPIO16 only after boot</td></tr>
+  <tr><td>1 · 3</td><td>UART0 TX · RX</td><td>USB-C via CH340C, auto-reset by DTR / RTS</td></tr>
+  <tr><td>16</td><td>Oscillator / PHY enable</td><td>High = on</td></tr>
+  <tr><td>18 · 23</td><td>MDIO · MDC</td><td>PHY address 1</td></tr>
+  <tr><td>19 · 22 · 21</td><td>TXD0 · TXD1 · TX_EN</td><td>Fixed by the ESP32 EMAC</td></tr>
+  <tr><td>25 · 26 · 27</td><td>RXD0 · RXD1 · CRS_DV</td><td>Fixed by the ESP32 EMAC</td></tr>
+  <tr><td>32 (ADC1 4)</td><td>Supply voltage</td><td>100 k / 10 k divider</td></tr>
+  <tr><td>33 (ADC1 5)</td><td>Temperature</td><td>NTC 10 k B3950 to GND, 10 k to 3.3 V; alarm above 75 °C</td></tr>
+  <tr><td>15</td><td>Button</td><td>Held 5 s at power-up: factory settings, DHCP on</td></tr>
+  <tr><td>14 / 2</td><td>Status LED</td><td>Fast blink = identify · slow blink = no network · on = running</td></tr>
+  <tr><td>12</td><td>— unused</td><td>Strapping pin (flash voltage): keep free</td></tr>
+</table>
+<h3>Core bill of materials</h3>
+<table>
+  <tr><th>Ref</th><th>Part</th><th>Qty</th></tr>
+  <tr><td>U3</td><td>ESP32-WROOM-32E, 4 MB (or a WT32-ETH01 module, which carries U3, U4 and J2)</td><td>1</td></tr>
+  <tr><td>U4</td><td>LAN8720A-CP + 50 MHz oscillator with enable, 12.1 k 1 % RBIAS</td><td>1</td></tr>
+  <tr><td>J2</td><td>HR911105A RJ45 with magnetics</td><td>1</td></tr>
+  <tr><td>U1</td><td>MP2315 or TPS54331 buck 24 V → 5 V, 2 A</td><td>1</td></tr>
+  <tr><td>U2</td><td>AMS1117-3.3 (or AP2112K-3.3)</td><td>1</td></tr>
+  <tr><td>U5</td><td>CH340C, USB-C receptacle, 2 × S8050, 2 × 5.1 k</td><td>1</td></tr>
+  <tr><td>J1</td><td>Phoenix MSTB 2-pin, P-MOSFET (AO3401), SMBJ30A, 2 A polyfuse</td><td>1</td></tr>
+  <tr><td>—</td><td>NTC 10 k B3950, 100 k / 10 k / 10 k resistors, button, LED, decoupling</td><td>—</td></tr>
+</table>
+<div class="note">The quickest prototype is a <b>WT32-ETH01</b> (ESP32 + LAN8720 + RJ45 on one module, oscillator enable on GPIO16): it matches these pins. Add the 5 V supply, the level shifter and the device I/O on a carrier board.</div>
+
+<h2 id="winch">3. WN-WINCH — kinetic winch</h2>
+<figure><img src="img/winch.svg" alt="Winch block diagram"><figcaption>Winch: step / dir / enable to an external closed-loop driver, brake switch, limit switches and E-stop sense through opto-couplers, the lamp on the cable.</figcaption></figure>
+<h3>Pins</h3>
+<table>
+  <tr><th>GPIO</th><th>Signal</th><th>Circuit</th></tr>
+  <tr><td>4</td><td>STEP</td><td>74HCT245 at 5 V → driver PUL+ (PUL− to GND). Pulse 4 µs, up to 25 kHz</td></tr>
+  <tr><td>5</td><td>DIR</td><td>74HCT245 → DIR+; high = cable out (down), changeable in menuconfig</td></tr>
+  <tr><td>17</td><td>ENABLE</td><td>74HCT245 → ENA+; low = enabled</td></tr>
+  <tr><td>2</td><td>Brake release</td><td>AO3400 N-MOSFET, 100 k gate pull-down (brake closed at boot), SS34 flyback</td></tr>
+  <tr><td>13</td><td>Lamp data</td><td>74HCT245 → 33 Ω → lamp cable</td></tr>
+  <tr><td>34</td><td>Top limit (home)</td><td>NC switch, 24 V → PC817 → 10 k pull-up; low = pressed</td></tr>
+  <tr><td>35</td><td>Bottom limit</td><td>as above</td></tr>
+  <tr><td>36</td><td>Driver alarm</td><td>Driver ALM (open collector) → PC817; low = fault → alarm <code>stall</code></td></tr>
+  <tr><td>39</td><td>E-stop chain</td><td>Safety relay auxiliary contact → PC817; low = chain open → alarm <code>estop</code></td></tr>
+</table>
+<h3>How the firmware moves the winch</h3>
+<ul>
+  <li><b>Position</b> is kept in motor steps from the top reference and converted with <i>steps per millimetre</i> (default 12.73: 1600 steps per revolution on a 40 mm drum).</li>
+  <li><b>DMX</b>: two channels at <code>address</code>, coarse then fine; 0 = <code>travel.min</code> (top), 65535 = <code>travel.max</code>; <code>invert</code> swaps the ends. After 2.5 s without data: <code>hold</code> or <code>home</code>.</li>
+  <li><b>Ramp</b>: a 1 kHz task runs a trapezoid profile with <code>speedMax</code> and <code>accel</code> (used for braking too); a hardware timer makes the step pulses.</li>
+  <li><b>Manual control</b> (Home, Jog, Go to, Stop) wins over DMX until <i>Release</i>. A jog stops by itself one second after its last command.</li>
+  <li><b>Homing</b>: up at the homing speed until the top switch closes; that point is 0 mm. Until the winch is homed it ignores DMX (alarm <code>nothomed</code>) — switch that off in menuconfig only for a bench test.</li>
+  <li><b>Inside the step interrupt</b>: no step towards a pressed limit switch, none while the E-stop chain is open, none above 0 mm except while homing.</li>
+  <li><b>Brake</b>: released 80 ms before the first step, closed 0.5 s after the motor stopped.</li>
+</ul>
+<h3>Winch bill of materials</h3>
+<table>
+  <tr><th>Ref</th><th>Part</th><th>Qty</th></tr>
+  <tr><td>—</td><td>Core board</td><td>1</td></tr>
+  <tr><td>U10</td><td>74HCT245</td><td>1</td></tr>
+  <tr><td>U11–U14</td><td>PC817, 2.2 k (24 V side), 10 k pull-ups, 100 nF</td><td>4</td></tr>
+  <tr><td>Q10</td><td>AO3400, SS34, 100 Ω, 100 k</td><td>1</td></tr>
+  <tr><td>Driver</td><td>Closed-loop stepper driver, 48 V (HBS86H, CL86T or similar)</td><td>1</td></tr>
+  <tr><td>M1</td><td>NEMA 34 closed-loop stepper with 24 V spring-applied brake, drum 40 mm, wire rope</td><td>1</td></tr>
+  <tr><td>S1, S2</td><td>Mechanical limit switches, NC</td><td>2</td></tr>
+  <tr><td>K1</td><td>Two-channel safety relay (PNOZ s3, Phoenix PSR-ESAM4 or similar)</td><td>1</td></tr>
+  <tr><td>K2</td><td>Contactor, motor and brake supply</td><td>1</td></tr>
+  <tr><td>PSU</td><td>48 V 7 A (motor), 24 V 2 A (logic, brake, lamp)</td><td>1 + 1</td></tr>
+  <tr><td>Lamp</td><td>60 × WS2812B, 24 V → 5 V 4 A buck in the lamp, 4-pin XLR</td><td>1</td></tr>
+</table>
+<div class="warn"><b>Safety.</b> A winch lifts loads, possibly over people. The E-stop chain must cut motor and brake power in hardware; the firmware is never the only barrier. Load ratings, a secondary suspension, and the standards that apply where it is used (for example DGUV V17 / BGV C1, IEC 60204-32) are part of a real product. These diagrams are a development reference, not a certified design.</div>
+
+<h2 id="pixel">4. WN-PIX4 — pixel node</h2>
+<figure><img src="img/pixel.svg" alt="Pixel node block diagram"><figcaption>Pixel node: four outputs through a 74HCT245 level shifter and series resistors, pixel power distributed through one fuse per output.</figcaption></figure>
+<h3>Pins and outputs</h3>
+<table>
+  <tr><th>Output</th><th>GPIO</th><th>Circuit</th></tr>
+  <tr><td>1</td><td>4</td><td rowspan="4">74HCT245 at 5 V → 33 Ω → 100 Ω → connector (V+, data, GND); ATO fuse 7.5 A on V+; RMT channel per output</td></tr>
+  <tr><td>2</td><td>5</td></tr>
+  <tr><td>3</td><td>13</td></tr>
+  <tr><td>4</td><td>14</td></tr>
+</table>
+<h3>How the firmware maps DMX to pixels</h3>
+<ul>
+  <li>Channels arrive as R, G, B (and W for SK6812-RGBW) per <b>controlled</b> pixel; <code>group</code> physical pixels share one.</li>
+  <li>The first universe starts at <code>startChannel</code>; every following universe starts at channel 1. A universe carries 170 RGB or 127 RGBW pixels — pixels are never split across two universes.</li>
+  <li><code>order</code> says how the chip wants the colours on the wire (GRB for WS2812B); it does not change the colour. <code>gamma</code> and <code>limit</code> (brightness ceiling) are applied on the node.</li>
+  <li>A test pattern (red, green, blue, white, chase, rainbow) overrides the network data on its output until <i>off</i>; <i>Identify</i> flashes all outputs white.</li>
+  <li>This is the same mapping as <code>renderPixels()</code> in the Node Manager, so the <i>Simulator</i> tab shows what the strips will show.</li>
+</ul>
+<h3>Pixel node bill of materials</h3>
+<table>
+  <tr><th>Ref</th><th>Part</th><th>Qty</th></tr>
+  <tr><td>—</td><td>Core board (12–24 V logic input)</td><td>1</td></tr>
+  <tr><td>U20</td><td>74HCT245, 4 × 33 Ω, 4 × 100 Ω</td><td>1</td></tr>
+  <tr><td>J20–J23</td><td>3-pin output connectors, ATO fuse holders + 7.5 A fuses, indicator LEDs</td><td>4</td></tr>
+  <tr><td>J24</td><td>Pixel power in, 2 × M5 studs, up to 40 A</td><td>1</td></tr>
+  <tr><td>PSU</td><td>5 V or 12 V, sized for the strips (60 mA per WS2812B at full white)</td><td>1</td></tr>
+</table>
+
+<h2 id="firmware">5. Firmware</h2>
+<p>ESP-IDF 5.5, plain C, in <code>firmware/</code>. One source, two builds.</p>
+<table>
+  <tr><th>File</th><th>What</th></tr>
+  <tr><td><code>wn_main.c</code></td><td>Start-up, status LED, button, supply and temperature measurement</td></tr>
+  <tr><td><code>wn_net.c</code></td><td>Ethernet (LAN8720), Wi-Fi fallback, DHCP with a static fallback after 10 s, the device id (<code>WN</code> + last three MAC bytes)</td></tr>
+  <tr><td><code>wn_config.c</code></td><td>The configuration as one JSON tree in NVS; deep merge of a patch exactly like the Node Manager's <code>merge()</code></td></tr>
+  <tr><td><code>wn_api.c</code></td><td>Discovery on UDP 7788 and the HTTP API: <code>/api/info</code>, <code>/api/config</code> (GET, PUT), <code>/api/status</code>, <code>/api/action</code></td></tr>
+  <tr><td><code>wn_dmx.c</code></td><td>Art-Net and sACN receiver, ArtPoll replies, frames per second and level per universe, 2.5 s signal loss</td></tr>
+  <tr><td><code>wn_pixels.c</code></td><td>One pixel output on the RMT peripheral; DMX mapping, order, gamma, limit, test patterns</td></tr>
+  <tr><td><code>wn_winch.c</code></td><td>Step generator, trapezoid ramp, homing, limits, brake, manual control, the lamp</td></tr>
+  <tr><td><code>wn_pixelnode.c</code></td><td>Four outputs, one task each, configuration ranges, test action</td></tr>
+  <tr><td><code>Kconfig.projbuild</code></td><td>Device type, network, every pin, steps per millimetre, homing speed</td></tr>
+</table>
+<p>The pin numbers in the diagrams are the defaults in <code>Kconfig.projbuild</code>; <code>idf.py menuconfig</code> → <i>Wincode node</i> changes them for another board.</p>
+
+<h2 id="build">6. Build and flash</h2>
+<pre>$env:IDF_TOOLS_PATH = "D:\ESP\.espressif"; . D:\ESP\.espressif\v5.5\esp-idf\export.ps1
+cd firmware
+
+# winch (the default)
+idf.py build
+idf.py -p COM4 flash monitor
+
+# pixel node
+idf.py -B build-pixel -D SDKCONFIG=sdkconfig.pixel -D "SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.defaults.pixel" build
+idf.py -B build-pixel -p COM4 flash monitor</pre>
+<p>Wi-Fi: <code>idf.py menuconfig</code> → <i>Wincode node → Network</i> → network name and password. Without a name the node is Ethernet only.</p>
+
+<h2 id="test">7. Bring-up and test</h2>
+<ol>
+  <li><b>Power and network.</b> Plug in the cable; the status LED blinks slowly until there is an address, then stays on. The serial monitor prints the address and the id.</li>
+  <li><b>Node Manager.</b> Start it (<code>npm start</code> in wincodeNodeManager) and press <i>Scan</i>: the node appears next to the virtual ones. Off the manager's subnet use <i>Add by address</i>.</li>
+  <li><b>Configure.</b> Name, universes, pixel counts, travel — <i>Apply</i> writes them to the node, which keeps them across power cycles.</li>
+  <li><b>Identify.</b> The LED and the outputs flash.</li>
+  <li><b>Pixel node:</b> <i>Commissioning tools</i> → test patterns per output; then send DMX from DMX Studio (Art-Net to the node's address).</li>
+  <li><b>Winch:</b> with the motor disconnected from the load, <i>Home</i>, then <i>Jog</i> and <i>Go to</i>; check that both limit switches and the E-stop stop it. Only then <i>Release</i> and send DMX.</li>
+  <li><b>Compare.</b> Send the same DMX to a virtual node of the same settings: the Node Manager's <i>Simulator</i> tab shows what the hardware should do.</li>
+</ol>
+
+<h2 id="status">8. Status and limits</h2>
+<ul>
+  <li>Both firmware builds compile with ESP-IDF 5.5 (winch 0x7AE50 bytes, pixel node 0x791D0 bytes; 52–53 % of the app partition free). <b>Nothing has run on hardware yet.</b></li>
+  <li>The diagrams are block diagrams with parts and pins, not a PCB: a schematic and layout (KiCad) are the next step.</li>
+  <li>Not built yet: APA102 (clocked) pixels, the eDMX node and the hub, firmware update over the network, RDM.</li>
+  <li>The winch's load, speed and current figures are examples; size the motor, drum and driver for the real load.</li>
+</ul>
+</main>
+</div>
+</body>
+</html>
