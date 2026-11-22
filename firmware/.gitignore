@@ -6,3 +6,5 @@ sdkconfig.pixel
 sdkconfig.pixel.old
 managed_components/
 dependencies.lock
+sdkconfig.edmx
+sdkconfig.edmx.old

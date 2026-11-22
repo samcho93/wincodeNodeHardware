@@ -4,7 +4,7 @@ Circuit diagrams + ESP32 firmware for the nodes of the Wincode Node Manager (`D:
 
 ## Build
 - ESP-IDF **5.5** (`D:\ESP\.espressif\v5.5\esp-idf`, `IDF_TOOLS_PATH=D:\ESP\.espressif`), target esp32.
-- Winch: `idf.py build` (default `sdkconfig`). Pixel node: `-B build-pixel -D SDKCONFIG=sdkconfig.pixel -D "SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.defaults.pixel"`.
+- Winch: `idf.py build` (default `sdkconfig`). eDMX node: same with `edmx`. Pixel node: `-B build-pixel -D SDKCONFIG=sdkconfig.pixel -D "SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.defaults.pixel"`.
   In PowerShell call `python $env:IDF_PATH\tools\idf.py` with an argument array: the `idf.py` shell function splits `-D`.
 - Warnings are errors (`-Werror=misleading-indentation` etc.): one statement per `if` line.
 

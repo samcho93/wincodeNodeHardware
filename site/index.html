@@ -33,10 +33,11 @@ figure { margin: 14px 0 20px; } figure img { width: 100%; border-radius: 8px; bo
   <a href="#core">2. Core board</a>
   <a href="#winch">3. WN-WINCH — kinetic winch</a>
   <a href="#pixel">4. WN-PIX4 — pixel node</a>
-  <a href="#firmware">5. Firmware</a>
-  <a href="#build">6. Build and flash</a>
-  <a href="#test">7. Bring-up and test</a>
-  <a href="#status">8. Status and limits</a>
+  <a href="#edmx">5. WN-DMX2 — eDMX node</a>
+  <a href="#firmware">6. Firmware</a>
+  <a href="#build">7. Build and flash</a>
+  <a href="#test">8. Bring-up and test</a>
+  <a href="#status">9. Status and limits</a>
   <a href="https://github.com/samcho93/wincodeNodeHardware">Repository</a>
   <a href="https://samcho93.github.io/wincodeNodeManager/">Node Manager →</a>
 </nav>
@@ -48,6 +49,7 @@ figure { margin: 14px 0 20px; } figure img { width: 100%; border-radius: 8px; bo
 <div class="cards">
   <div class="card"><b>WN-WINCH</b><br>Kinetic winch: a stepper motor with brake follows a 16-bit DMX position; a 60-pixel lamp hangs on the cable. Limit switches, a hardware E-stop chain, homing.</div>
   <div class="card"><b>WN-PIX4</b><br>Pixel node: four WS2812B / WS2811 / SK6812 / SK6812-RGBW / UCS2903 outputs, up to 4096 pixels each, with per-output fuses.</div>
+  <div class="card"><b>WN-DMX2</b><br>eDMX node: two isolated DMX512 ports, Art-Net / sACN to DMX with HTP / LTP merge and signal-loss behaviour, or DMX in to the network.</div>
   <div class="card"><b>Simulator first</b><br>The Node Manager's virtual devices run the same behaviour (<code>vdevice.js</code>). Its <i>Simulator</i> tab shows what this hardware will do with the same DMX.</div>
 </div>
 <table>
@@ -158,7 +160,35 @@ figure { margin: 14px 0 20px; } figure img { width: 100%; border-radius: 8px; bo
   <tr><td>PSU</td><td>5 V or 12 V, sized for the strips (60 mA per WS2812B at full white)</td><td>1</td></tr>
 </table>
 
-<h2 id="firmware">5. Firmware</h2>
+<h2 id="edmx">5. WN-DMX2 — eDMX node</h2>
+<figure><img src="img/edmx.svg" alt="eDMX node block diagram"><figcaption>eDMX node: two DMX512 ports, each with an isolated RS-485 transceiver, protection and a 5-pin XLR.</figcaption></figure>
+<h3>Pins</h3>
+<table>
+  <tr><th>Port</th><th>UART</th><th>TX (DI)</th><th>RX (RO)</th><th>DE + /RE</th></tr>
+  <tr><td>1</td><td>UART1</td><td>GPIO4</td><td>GPIO35</td><td>GPIO5</td></tr>
+  <tr><td>2</td><td>UART2</td><td>GPIO13</td><td>GPIO36</td><td>GPIO14</td></tr>
+</table>
+<h3>What a port does</h3>
+<ul>
+  <li><b>Out</b> (network → DMX): the universe of the port goes out at <code>rate</code> frames a second (1–44): break 120 µs, mark-after-break 16 µs, start code 0, 512 slots at 250 kbit/s 8N2.</li>
+  <li><b>Merge</b>: up to four senders per universe are kept apart (Art-Net by address, sACN by CID). <code>htp</code> sends the highest value per channel, <code>ltp</code> the latest change.</li>
+  <li><b>Signal loss</b>: 2.5 s without a sender → <code>hold</code> keeps sending the last frame, <code>blackout</code> sends zeros.</li>
+  <li><b>In</b> (DMX → network): the transceiver listens; a break starts a frame; each frame goes out as ArtDmx (broadcast) or sACN (multicast to its universe).</li>
+  <li><b>Test patterns</b> and <i>Identify</i> override the network data on the port. Status reports <code>sources</code> (live senders) and <code>state</code> (live, hold, blackout, test, input, off) per port.</li>
+  <li>The Node Manager's <i>Simulator</i> shows the 512 channels each virtual port sends, after the same merge and loss rules.</li>
+</ul>
+<h3>eDMX node bill of materials</h3>
+<table>
+  <tr><th>Ref</th><th>Part</th><th>Qty</th></tr>
+  <tr><td>—</td><td>Core board</td><td>1</td></tr>
+  <tr><td>U31, U32</td><td>ADM2587E isolated RS-485 transceiver (or ISO3082 + B0505S DC/DC)</td><td>2</td></tr>
+  <tr><td>J31, J32</td><td>5-pin XLR, female (out) or male (in), Neutrik NC5FAH / NC5MAH</td><td>2</td></tr>
+  <tr><td>—</td><td>SM712 TVS, 2 × 4.7 Ω, 120 Ω + jumper, 1 nF / 2 kV, per port</td><td>2</td></tr>
+  <tr><td>—</td><td>Bi-colour status LED per port</td><td>2</td></tr>
+</table>
+<div class="note">Four or eight ports (WN-DMX4, WN-DMX8) need more lines than the ESP32 has free UARTs: they will be driven from the RMT peripheral in the next revision. RDM is not built yet; the <code>rdm</code> setting is kept and ignored.</div>
+
+<h2 id="firmware">6. Firmware</h2>
 <p>ESP-IDF 5.5, plain C, in <code>firmware/</code>. One source, two builds.</p>
 <table>
   <tr><th>File</th><th>What</th></tr>
@@ -166,15 +196,16 @@ figure { margin: 14px 0 20px; } figure img { width: 100%; border-radius: 8px; bo
   <tr><td><code>wn_net.c</code></td><td>Ethernet (LAN8720), Wi-Fi fallback, DHCP with a static fallback after 10 s, the device id (<code>WN</code> + last three MAC bytes)</td></tr>
   <tr><td><code>wn_config.c</code></td><td>The configuration as one JSON tree in NVS; deep merge of a patch exactly like the Node Manager's <code>merge()</code></td></tr>
   <tr><td><code>wn_api.c</code></td><td>Discovery on UDP 7788 and the HTTP API: <code>/api/info</code>, <code>/api/config</code> (GET, PUT), <code>/api/status</code>, <code>/api/action</code></td></tr>
-  <tr><td><code>wn_dmx.c</code></td><td>Art-Net and sACN receiver, ArtPoll replies, frames per second and level per universe, 2.5 s signal loss</td></tr>
+  <tr><td><code>wn_dmx.c</code></td><td>Art-Net and sACN receiver (up to four senders per universe kept apart), HTP / LTP merge, ArtPoll replies, frames per second and level, 2.5 s signal loss; Art-Net / sACN sender for DMX in</td></tr>
   <tr><td><code>wn_pixels.c</code></td><td>One pixel output on the RMT peripheral; DMX mapping, order, gamma, limit, test patterns</td></tr>
   <tr><td><code>wn_winch.c</code></td><td>Step generator, trapezoid ramp, homing, limits, brake, manual control, the lamp</td></tr>
   <tr><td><code>wn_pixelnode.c</code></td><td>Four outputs, one task each, configuration ranges, test action</td></tr>
+  <tr><td><code>wn_edmx.c</code></td><td>Two DMX512 ports on UART1 / UART2: frames with break, merge, signal loss, DMX in → Art-Net / sACN</td></tr>
   <tr><td><code>Kconfig.projbuild</code></td><td>Device type, network, every pin, steps per millimetre, homing speed</td></tr>
 </table>
 <p>The pin numbers in the diagrams are the defaults in <code>Kconfig.projbuild</code>; <code>idf.py menuconfig</code> → <i>Wincode node</i> changes them for another board.</p>
 
-<h2 id="build">6. Build and flash</h2>
+<h2 id="build">7. Build and flash</h2>
 <pre>$env:IDF_TOOLS_PATH = "D:\ESP\.espressif"; . D:\ESP\.espressif\v5.5\esp-idf\export.ps1
 cd firmware
 
@@ -184,25 +215,29 @@ idf.py -p COM4 flash monitor
 
 # pixel node
 idf.py -B build-pixel -D SDKCONFIG=sdkconfig.pixel -D "SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.defaults.pixel" build
-idf.py -B build-pixel -p COM4 flash monitor</pre>
+idf.py -B build-pixel -p COM4 flash monitor
+
+# eDMX node
+idf.py -B build-edmx -D SDKCONFIG=sdkconfig.edmx -D "SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.defaults.edmx" build</pre>
 <p>Wi-Fi: <code>idf.py menuconfig</code> → <i>Wincode node → Network</i> → network name and password. Without a name the node is Ethernet only.</p>
 
-<h2 id="test">7. Bring-up and test</h2>
+<h2 id="test">8. Bring-up and test</h2>
 <ol>
   <li><b>Power and network.</b> Plug in the cable; the status LED blinks slowly until there is an address, then stays on. The serial monitor prints the address and the id.</li>
   <li><b>Node Manager.</b> Start it (<code>npm start</code> in wincodeNodeManager) and press <i>Scan</i>: the node appears next to the virtual ones. Off the manager's subnet use <i>Add by address</i>.</li>
   <li><b>Configure.</b> Name, universes, pixel counts, travel — <i>Apply</i> writes them to the node, which keeps them across power cycles.</li>
   <li><b>Identify.</b> The LED and the outputs flash.</li>
   <li><b>Pixel node:</b> <i>Commissioning tools</i> → test patterns per output; then send DMX from DMX Studio (Art-Net to the node's address).</li>
+  <li><b>eDMX node:</b> test patterns per port with a DMX tester or a fixture on the line; then send the same universe from two consoles and switch the port between HTP and LTP.</li>
   <li><b>Winch:</b> with the motor disconnected from the load, <i>Home</i>, then <i>Jog</i> and <i>Go to</i>; check that both limit switches and the E-stop stop it. Only then <i>Release</i> and send DMX.</li>
   <li><b>Compare.</b> Send the same DMX to a virtual node of the same settings: the Node Manager's <i>Simulator</i> tab shows what the hardware should do.</li>
 </ol>
 
-<h2 id="status">8. Status and limits</h2>
+<h2 id="status">9. Status and limits</h2>
 <ul>
-  <li>Both firmware builds compile with ESP-IDF 5.5 (winch 0x7AE50 bytes, pixel node 0x791D0 bytes; 52–53 % of the app partition free). <b>Nothing has run on hardware yet.</b></li>
+  <li>All three firmware builds compile with ESP-IDF 5.5 (winch, pixel node and eDMX node, each about half of the app partition). <b>Nothing has run on hardware yet.</b></li>
   <li>The diagrams are block diagrams with parts and pins, not a PCB: a schematic and layout (KiCad) are the next step.</li>
-  <li>Not built yet: APA102 (clocked) pixels, the eDMX node and the hub, firmware update over the network, RDM.</li>
+  <li>Not built yet: APA102 (clocked) pixels, eDMX nodes with four or eight ports (RMT), the hub, firmware update over the network, RDM.</li>
   <li>The winch's load, speed and current figures are examples; size the motor, drum and driver for the real load.</li>
 </ul>
 </main>

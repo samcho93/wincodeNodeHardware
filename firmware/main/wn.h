@@ -3,6 +3,7 @@
 //  One source tree builds two devices, chosen in menuconfig (Wincode node → Device type):
 //    winch   kinetic winch: step/dir motor on a 16-bit DMX position, with a pixel lamp        (model WN-WINCH)
 //    pixel   pixel node: four WS281x / SK6812 outputs                                          (model WN-PIX4)
+//    edmx    eDMX node: two DMX512 ports, Art-Net / sACN to DMX with HTP / LTP merge, or DMX in   (model WN-DMX2)
 #pragma once
 #include <stdbool.h>
 #include <stdint.h>
@@ -20,6 +21,10 @@
 #define WN_TYPE  "winch"
 #define WN_MODEL "WN-WINCH"
 #define WN_PORTS 1
+#elif CONFIG_WN_DEVICE_EDMX
+#define WN_TYPE  "edmx"
+#define WN_MODEL "WN-DMX2"
+#define WN_PORTS 2
 #else
 #define WN_TYPE  "pixel"
 #define WN_MODEL "WN-PIX4"
@@ -46,11 +51,15 @@ const char *wn_cfg_str(const char *path, const char *fallback);  // valid until 
 uint32_t wn_config_generation(void);   // changes with every patch: modules re-read their settings when it moves
 
 /* ── DMX from the network (wn_dmx.c): Art-Net and sACN ── */
-typedef struct { uint16_t universe; uint8_t data[512]; uint32_t frames; uint32_t fps; uint8_t level; int64_t last_us; bool used; } wn_universe_t;
+#define WN_SOURCES 4                    // senders kept apart per universe (for merging)
+typedef struct { uint32_t key; uint8_t data[512]; int64_t last_us; uint32_t frames, fps; } wn_source_t;
+typedef struct { uint16_t universe; uint8_t data[512]; uint8_t ltp[512]; wn_source_t src[WN_SOURCES]; uint32_t frames; uint32_t fps; uint8_t level; int64_t last_us; bool used; } wn_universe_t;
 void wn_dmx_start(void);
 void wn_dmx_listen(const uint16_t *universes, int n);          // the universes this device needs now
 bool wn_dmx_copy(uint16_t universe, uint8_t out[512]);         // false when nothing arrived in the last WN_LOSS_MS
 void wn_dmx_stat(uint16_t universe, uint32_t *fps, uint8_t *level);
+int wn_dmx_merge(uint16_t universe, bool htp, uint8_t out[512]);   // live sources merged (HTP: highest, LTP: latest change); returns how many were live
+void wn_dmx_send(uint16_t universe, bool sacn, const uint8_t data[512]);   // DMX in → network: ArtDmx broadcast or sACN multicast
 
 /* ── pixels (wn_pixels.c): one WS281x / SK6812 output ── */
 typedef struct wn_strip wn_strip_t;

@@ -7,6 +7,8 @@ menu "Wincode node"
             bool "Kinetic winch (WN-WINCH)"
         config WN_DEVICE_PIXEL
             bool "Pixel node, 4 outputs (WN-PIX4)"
+        config WN_DEVICE_EDMX
+            bool "eDMX node, 2 DMX512 ports (WN-DMX2)"
     endchoice
 
     menu "Network"
@@ -100,6 +102,28 @@ menu "Wincode node"
         config WN_LAMP_GPIO
             int "Lamp pixel data GPIO"
             default 13
+    endmenu
+
+    menu "eDMX node"
+        depends on WN_DEVICE_EDMX
+        config WN_DMX1_TX_GPIO
+            int "Port 1 TX (DI of the RS-485 transceiver)"
+            default 4
+        config WN_DMX1_RX_GPIO
+            int "Port 1 RX (RO)"
+            default 35
+        config WN_DMX1_DE_GPIO
+            int "Port 1 direction (DE and /RE tied: high = transmit)"
+            default 5
+        config WN_DMX2_TX_GPIO
+            int "Port 2 TX"
+            default 13
+        config WN_DMX2_RX_GPIO
+            int "Port 2 RX"
+            default 36
+        config WN_DMX2_DE_GPIO
+            int "Port 2 direction"
+            default 14
     endmenu
 
     menu "Pixel node"

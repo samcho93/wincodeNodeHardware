@@ -129,6 +129,24 @@ def pixel():
     s.save('pixel.svg')
 
 
+def edmx():
+    s = Sheet(1200, 700, 'WN-DMX2 — eDMX node, 2 DMX512 ports (core board + isolated RS-485 per port)')
+    s.box(20, 60, 230, 250, 'Core board (ESP32)', ['UART1  TX GPIO4 · RX GPIO35', '       DE GPIO5', 'UART2  TX GPIO13 · RX GPIO36', '       DE GPIO14', '', 'GPIO2  status LED', 'GPIO15 button', '250 kbit/s 8N2, break by', '  inverting TX (120 µs)'], 'core')
+    for k, y0 in enumerate([60, 330]):
+        n = k + 1
+        s.box(330, y0, 260, 200, f'U3{n}  ADM2587E (port {n})', ['isolated RS-485 transceiver', '  with its own isolated 5 V', '3.3 V logic side: DI ← TX,', '  RO → RX, DE + /RE ← DE pin', 'bus side: A, B, isolated GND', '2.5 kV isolation (the DMX', '  line never reaches the ESP32)'], 'io')
+        s.wire([(250, 100 + k * 120), (290, 100 + k * 120), (290, y0 + 60), (330, y0 + 60)], f'TX / RX / DE {n}', 'io', 256, 94 + k * 120)
+        s.box(670, y0, 220, 200, f'J3{n}  5-pin XLR', ['female: out (DMX to fixtures)', '  pin 1 GND (isolated)', '  pin 2 data − (B)', '  pin 3 data + (A)', '  pins 4, 5 unused', 'male version for DMX in', 'status LED: green = live,', '  yellow = hold, red = loss'], 'pix')
+        s.wire([(590, y0 + 100), (670, y0 + 100)], 'A / B / GND', 'pix', 598, y0 + 94)
+        s.box(950, y0, 220, 200, f'Port {n} protection', ['120 Ω termination, jumper', '  (DMX in, or end of line)', 'SM712 TVS on A / B', '2 × 4.7 Ω series in A / B', 'shield to chassis via', '  1 nF / 2 kV'], 'safe')
+        s.wire([(890, y0 + 100), (950, y0 + 100)], '', 'safe')
+    s.text(20, 580, 'DMX out: every frame is break (120 µs), mark-after-break (16 µs), start code 0 and 512 slots — 22.7 ms on the wire, so at most 44 frames a second.', 11, color='#555')
+    s.text(20, 596, 'Several senders on one universe are merged on the node: HTP = the highest value per channel, LTP = the latest change. After 2.5 s without a sender', 11, color='#555')
+    s.text(20, 612, 'the port holds the last frame or goes dark (blackout). DMX in: a break starts a frame; every frame goes out as ArtDmx (broadcast) or sACN (multicast).', 11, color='#555')
+    s.text(20, 636, 'Four or eight ports need more than the two free UARTs: those boards drive the lines from the RMT peripheral (next revision). RDM is not built yet.', 11, 'bold', '#222')
+    s.save('edmx.svg')
+
+
 if __name__ == '__main__':
-    core(); winch(); pixel()
+    core(); winch(); pixel(); edmx()
     print('wrote', os.path.normpath(OUT))
