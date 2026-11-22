@@ -1,5 +1,7 @@
 # Wincode Node Hardware
 
+> Part of the **Wincode Lighting Suite** — all programs on one page: https://samcho93.github.io/wincodeSuite/
+
 Circuit diagrams and ESP32 firmware for the nodes that the
 [Wincode Node Manager](https://github.com/samcho93/wincodeNodeManager) finds, configures and watches.
 
